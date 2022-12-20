@@ -1,24 +1,33 @@
 from dataclasses import dataclass, field
-from typing import List, Any
+from typing import List, Any, Dict
 import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, OmegaConf
 
 
+
 @dataclass
 class LSTMConfig:
-    sample: str = 'lstm'
-    pass
+    name: str = 'lstm'
+    hidden_dim: int = 512
+    n_layers: int = 2
+    bidirectional: bool = True
+    dropout: float = 0.2
+
 
 @dataclass
 class DenseConfig:
-    sample: str = 'dense'
-    pass
+    name: str = 'dense'
+    n_layers: int = 2
+    dropout: float = 0.2 
 
 @dataclass
 class TransformerConfig:
-    sample: str = 'transformer'
-    pass
+    name: str = 'transformer'
+    dropout: float = 0.2
+    nhead: int = 8
+    num_layers: int = 2
+
 
 
 @dataclass
@@ -30,7 +39,8 @@ class TrainConfig:
 
     model = MISSING
     #limit_data: int = None
-    limit_data = None
+    limit_data: int = -1
+    batch_size: int = 32
 
 
 

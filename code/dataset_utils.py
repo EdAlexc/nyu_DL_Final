@@ -2,11 +2,14 @@
 import subprocess
 from pathlib import Path
 import pandas as pd
-from torch.utils.data import Dataset
+import numpy as np
+import torch
+from torch.utils.data import Dataset, DataLoader
+import torch.nn.functional as F
 from transformers import BertTokenizer
 
 
-def fetch_data():
+def fetch_data(force):
     # check if data directory exists
     if not Path('data').exists() or force:
         subprocess.run(['kaggle', 'competitions', 'download', '-c', 'feedback-prize-2021'])
@@ -17,40 +20,43 @@ def fetch_data():
 
     return pd.read_csv(Path('data', 'train.csv'))
 
-def buildDataLoader(dataset, batch_size):
-    return DataLoader(dataset, batch_size, shuffle=True)
-
 """
 Download writing data
 """
-def get_data(test_split_perc: float = 0.2, force: bool = False, limit_data: int = -1):
-    data = fetch_data()
+def get_data(test_split_perc: float = 0.2, force: bool = False, limit_data: int = -1, batch_size: int = 32):
+    data = fetch_data(force)
     if limit_data > 0:
         data = data[:limit_data]
     train_data = data.sample(frac=1-test_split_perc)
     test_data = data.copy().drop(train_data.index).reset_index(drop=True)
 
-    return WritingDataset(train_data), WritingDataset(test_data)
+    train_dataset = WritingDataset(train_data)
+    test_dataset = WritingDataset(test_data, label_map=train_dataset.label_map)
+
+    return DataLoader(train_dataset, batch_size, shuffle=True), DataLoader(test_dataset, batch_size, shuffle=True), train_dataset.label_map
 
 
 class WritingDataset(Dataset):
-    def __init__(self, data: pd.DataFrame):
+    def __init__(self, data: pd.DataFrame, label_map=None):
         self.data = data
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        self.max_input_length = self.tokenizer.max_model_input_sizes('bert-base-uncased')
-        self.label_map = {
-                label: i 
-                for i, label in enumerate(data['discourse_type'].unique())
-                }
+        if label_map is None:
+            self.label_map = {
+                    label: i 
+                    for i, label in enumerate(data['discourse_type'].unique())
+                    }
+        else:
+            self.label_map = label_map
         self.one_hot_encoding = torch.Tensor(np.eye(len(self.label_map)))
+        
 
 
     def __len__(self):
         return len(self.data)
 
-    def __get_item__(self, idx):
+    def __getitem__(self, idx):
         sample = self.data.iloc[idx]
-        encoded = tokenizer.encode(
+        encoded = self.tokenizer.encode(
                     sample['discourse_text'],
                     is_split_into_words = True,
                     padding = 'max_length',
